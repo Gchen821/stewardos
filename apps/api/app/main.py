@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import router
+from app.api.router import api_router
 from app.config import get_settings
 
 
@@ -35,4 +35,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router, prefix=settings.api_v1_prefix)
+app.include_router(api_router, prefix=settings.api_v1_prefix)

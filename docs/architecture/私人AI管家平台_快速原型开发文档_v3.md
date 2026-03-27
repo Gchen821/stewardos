@@ -1,6 +1,10 @@
 **私人 AI 管家平台  
 开发文档（快速原型 V2）**
 
+> 补充说明：本文件继续承担产品范围、页面/API 草案、数据表与阶段计划的职责。
+> 与 Agent Runtime、记忆、上下文工程、协议通信、模型路由相关的工程化设计，
+> 请同时参考 [StewardOS-Agent-Runtime-架构设计.md](/home/gc/project/StewardOS/docs/architecture/StewardOS-Agent-Runtime-架构设计.md)。
+
 面向快速上架的 MVP / 重点前置权限控制与安全可靠性
 
 <table>

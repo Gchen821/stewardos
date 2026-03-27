@@ -10,7 +10,7 @@
     "install:web": "pnpm --dir apps/web install",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f"
+    "docker:logs": "docker compose logs -f",
+    "docs:sync": "bash scripts/update-structure-doc.sh"
   }
 }
-

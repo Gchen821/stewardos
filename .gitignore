@@ -37,3 +37,5 @@ apps/web/node_modules/
 postgres_data/
 redis_data/
 minio_data/
+
+docs/*

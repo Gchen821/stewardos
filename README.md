@@ -1,65 +1,15 @@
 # StewardOS
 
-StewardOS 是一个私人 AI 管家平台的快速原型仓库。当前仓库已经补齐前后端基础模板，并通过 Docker Compose 把 Next.js、FastAPI、PostgreSQL、Redis 和 MinIO 串成了一套可直接运行的全容器化开发环境。
+StewardOS 是一个私人 AI 管家平台的快速原型仓库。当前项目采用前后端全容器化开发模式，前端为 Next.js 控制台，后端为 FastAPI + Agent Runtime 骨架，依赖 PostgreSQL、Redis 和 MinIO。
 
-## 当前目录结构
-
-```text
-.
-├── apps
-│   ├── api                 # FastAPI 模板、Dockerfile、requirements
-│   └── web                 # Next.js 前端
-├── configs                 # 配置模板预留
-├── docs                    # PRD、架构和任务文档
-├── infra
-│   ├── docker              # 容器脚本预留
-│   ├── openapi             # OpenAPI 导出预留
-│   └── sql                 # SQL 脚本预留
-├── packages
-│   ├── sdk                 # SDK 预留
-│   ├── shared              # 共享类型预留
-│   └── ui                  # UI 组件预留
-├── scripts                 # 脚本预留
-├── tests                   # 测试预留
-├── .env.example
-├── docker-compose.yml
-├── package.json
-├── pnpm-workspace.yaml
-├── tsconfig.base.json
-└── turbo.json
-```
-
-## 当前状态
-
-- `apps/web` 提供一个可直接访问 API 文档和健康检查的首页
-- `apps/api` 提供 FastAPI 应用入口、配置模块和基础健康检查路由
-- `docker-compose.yml` 已接入 PostgreSQL、Redis、MinIO、API、Web 五个容器
-- 根目录已具备 monorepo 级别的基础配置，可继续往完整 MVP 演进
-
-## 环境要求
-
-- Node.js 20
-- pnpm 10+
-- Python 3.11
-- Docker / Docker Compose
-
-## 启动方式
-
-### 1. 初始化环境变量
+## 快速启动
 
 ```bash
 cp .env.example .env
-```
-
-### 2. 一条命令启动全栈容器
-
-```bash
 docker compose up --build
 ```
 
-首次启动会构建 `apps/api` 镜像，并在开发模式挂载代码目录。
-
-启动完成后可访问：
+服务地址：
 
 - Web: `http://localhost:3000`
 - API Root: `http://localhost:8000/api/v1/`
@@ -70,57 +20,135 @@ docker compose up --build
 - MinIO API: `http://localhost:9000`
 - MinIO Console: `http://localhost:9001`
 
-### 3. 后台运行 / 停止
+## 当前状态
+
+- 前端控制台页面已落地：主控聊天、子 Agent 对话、Agent 仓库、Skills 仓库、Tools 仓库、账户设置。
+- Agent/Skills 仓库已实现本地状态的权限启用与 CRUD 交互，后端 API 已预留接口常量。
+- 后端已落地 Core/Domain 分层骨架与路由蓝图，适合作为下一阶段对接实现基础。
+
+## 文档导航
+
+- 产品范围与 MVP 需求：[私人AI管家平台_快速原型开发文档_v3.md](/home/gc/project/StewardOS/docs/architecture/私人AI管家平台_快速原型开发文档_v3.md)
+- Agent Runtime 运行时架构：[StewardOS-Agent-Runtime-架构设计.md](/home/gc/project/StewardOS/docs/architecture/StewardOS-Agent-Runtime-架构设计.md)
+- 前端架构设计：[frontend-architecture.md](/home/gc/project/StewardOS/docs/architecture/frontend-architecture.md)
+- 后端架构设计：[backend-architecture.md](/home/gc/project/StewardOS/docs/architecture/backend-architecture.md)
+- 数据库与存储设计：[database-design.md](/home/gc/project/StewardOS/docs/architecture/database-design.md)
+- API 契约草案：[api-contract.md](/home/gc/project/StewardOS/docs/architecture/api-contract.md)
+- API 目录蓝图：[apps/api/README.md](/home/gc/project/StewardOS/apps/api/README.md)
+
+## 项目结构（自动同步）
+
+运行以下命令更新结构区块：
 
 ```bash
-docker compose up -d --build
-docker compose down
+make docs-sync
 ```
 
-### 4. 查看日志
-
-```bash
-docker compose logs -f
-docker compose logs -f api
-docker compose logs -f web
-```
-
-### 5. 本地单独启动前端
-
-```bash
-cd apps/web
-corepack enable
-pnpm install
-pnpm dev
-```
-
-访问地址：`http://localhost:3000`
-
-### 6. 本地单独启动 API
-
-```bash
-cd apps/api
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-访问地址：`http://localhost:8000/docs`
-
-### 7. 常用命令
-
-```bash
-make web-install
-make web-dev
-make docker-up
-make docker-down
-make docker-logs
-```
-
-## 下一步建议
-
-1. 在 `apps/api/app` 下继续补数据库会话、鉴权、中间件和业务模块。
-2. 在 `packages/shared` 和 `packages/ui` 中落共享类型与通用组件。
-3. 把前端首页替换成真实的 Dashboard / Chat / Agents 页面。
-4. 为 PostgreSQL、Redis、MinIO 接入初始化脚本、迁移和测试。
+<!-- STRUCTURE:START -->
+.
+- apps
+  - api
+    - Dockerfile
+    - README.md
+    - app
+      - __init__.py
+      - api
+        - __init__.py
+        - dependencies
+        - router.py
+        - routes
+      - config.py
+      - core
+        - __init__.py
+        - agent
+        - llm
+        - memory
+        - protocols
+        - tools
+      - domain
+        - __init__.py
+        - agents
+        - audit
+        - chat
+        - policy
+        - skills
+      - main.py
+      - models
+        - __init__.py
+      - repositories
+        - __init__.py
+      - schemas
+        - __init__.py
+        - chat.py
+      - services
+        - __init__.py
+    - requirements.txt
+  - web
+    - .gitignore
+    - AGENTS.md
+    - CLAUDE.md
+    - README.md
+    - eslint.config.mjs
+    - next-env.d.ts
+    - next.config.ts
+    - package.json
+    - pnpm-lock.yaml
+    - pnpm-workspace.yaml
+    - postcss.config.mjs
+    - public
+      - file.svg
+      - globe.svg
+      - next.svg
+      - vercel.svg
+      - window.svg
+    - src
+      - app
+        - (console)
+        - favicon.ico
+        - globals.css
+        - layout.tsx
+        - page.tsx
+      - components
+        - console-shell.tsx
+      - lib
+        - api.ts
+        - default-data.ts
+        - steward-store.tsx
+        - types.ts
+    - tsconfig.json
+- configs
+- docs
+  - architecture
+    - StewardOS-Agent-Runtime-架构设计.md
+    - api-contract.md
+    - backend-architecture.md
+    - database-design.md
+    - frontend-architecture.md
+    - 私人AI管家平台_快速原型开发文档_v3.md
+    - 第七章 构建你的Agent框架.md
+    - 第九章 上下文工程.md
+    - 第八章 记忆与检索.md
+    - 第十三章 智能旅行助手.md
+    - 第十六章 毕业设计.md
+    - 第十章 智能体通信协议.md
+  - prd
+  - tasks
+- infra
+  - docker
+  - openapi
+  - sql
+- packages
+  - sdk
+  - shared
+  - ui
+- scripts
+  - update-structure-doc.sh
+- tests
+- .env.example
+- docker-compose.yml
+- package.json
+- Makefile
+- pnpm-workspace.yaml
+- turbo.json
+- tsconfig.base.json
+<!-- STRUCTURE:END -->

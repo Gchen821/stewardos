@@ -1,4 +1,4 @@
-.PHONY: web-install web-dev docker-up docker-down docker-logs
+.PHONY: web-install web-dev docker-up docker-down docker-logs docs-sync
 
 web-install:
 	cd apps/web && corepack enable && pnpm install
@@ -14,3 +14,6 @@ docker-down:
 
 docker-logs:
 	docker compose logs -f
+
+docs-sync:
+	./scripts/update-structure-doc.sh
