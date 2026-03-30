@@ -1,0 +1,8 @@
+name: Knowledge Query
+code: knowledge_query
+version: 0.1.0
+description: 对接外部知识源查询
+entrypoint: tool.py
+runtime_type: python
+risk_level: L1
+status: active

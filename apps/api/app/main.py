@@ -5,10 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.config import get_settings
+from app.services.repository_storage import get_repository_storage_service
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    get_repository_storage_service()
     yield
 
 

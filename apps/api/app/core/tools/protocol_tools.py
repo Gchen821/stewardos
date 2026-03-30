@@ -1,3 +1,5 @@
+"""Protocol-backed generic tool wrapper for MCP/A2A/ANP adapters."""
+
 from app.core.protocols.a2a import A2AAdapter
 from app.core.protocols.anp import ANPAdapter
 from app.core.protocols.mcp import MCPAdapter

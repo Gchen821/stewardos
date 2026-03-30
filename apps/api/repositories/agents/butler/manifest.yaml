@@ -1,0 +1,11 @@
+name: Butler
+code: butler
+version: 0.1.0
+type: butler
+description: 平台主控管家 Agent
+prompt_file: prompt.md
+allow_chat_select: true
+max_risk_level: L1
+bound_skills:
+  - knowledge_search
+status: offline

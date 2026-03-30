@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { type KeyboardEvent, type UIEvent, useMemo, useRef, useState, type WheelEvent } from "react";
 
 import { useStewardStore } from "@/lib/steward-store";
 
@@ -20,6 +20,39 @@ export default function AgentChatPage() {
   );
 
   const agentThreads = listThreads("agent", agentId);
+  const historyWheelDeltaRef = useRef(0);
+  const historyBottomHitRef = useRef(0);
+  const [historyVisibleCount, setHistoryVisibleCount] = useState(30);
+  const [historyLoadHintVisible, setHistoryLoadHintVisible] = useState(false);
+  const visibleAgentThreads = useMemo(
+    () => agentThreads.slice(0, historyVisibleCount),
+    [agentThreads, historyVisibleCount],
+  );
+  const hasMoreAgentHistory = visibleAgentThreads.length < agentThreads.length;
+
+  function loadMoreAgentHistory() {
+    setHistoryVisibleCount((prev) => Math.min(prev + 20, agentThreads.length));
+    historyBottomHitRef.current = 0;
+    setHistoryLoadHintVisible(false);
+  }
+
+  function onAgentHistoryWheel(event: WheelEvent<HTMLDivElement>) {
+    historyWheelDeltaRef.current = event.deltaY;
+  }
+
+  function onAgentHistoryScroll(event: UIEvent<HTMLDivElement>) {
+    if (!hasMoreAgentHistory) return;
+    const el = event.currentTarget;
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 16;
+    const scrollingDown = historyWheelDeltaRef.current > 0;
+    if (!nearBottom || !scrollingDown) return;
+    historyBottomHitRef.current += 1;
+    if (historyBottomHitRef.current >= 2) {
+      loadMoreAgentHistory();
+      return;
+    }
+    setHistoryLoadHintVisible(true);
+  }
 
   if (!agent) {
     return (
@@ -43,6 +76,12 @@ export default function AgentChatPage() {
     });
     setInput("");
     router.push(`/chat/agent/${agent.id}/session/${threadId}`);
+  }
+
+  function onInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    send();
   }
 
   return (
@@ -71,6 +110,7 @@ export default function AgentChatPage() {
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onKeyDown={onInputKeyDown}
             placeholder={`输入第一句话创建 ${agent.name} 新会话，发送后自动进入对话页。`}
             className="min-h-24 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none ring-indigo-200 transition focus:ring"
           />
@@ -86,9 +126,13 @@ export default function AgentChatPage() {
 
       <section className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <h3 className="text-lg font-semibold text-slate-900">{agent.name} 历史聊天记录</h3>
-        <div className="max-h-[260px] space-y-2 overflow-auto pr-1">
+        <div
+          className="max-h-[260px] space-y-2 overflow-auto pr-1"
+          onWheel={onAgentHistoryWheel}
+          onScroll={onAgentHistoryScroll}
+        >
           {agentThreads.length > 0 ? (
-            agentThreads.map((thread) => (
+            visibleAgentThreads.map((thread) => (
               <button
                 key={thread.id}
                 type="button"
@@ -106,6 +150,20 @@ export default function AgentChatPage() {
               暂无历史记录，先输入第一句话创建新会话。
             </p>
           )}
+          {hasMoreAgentHistory ? (
+            <div className="space-y-1 px-1 pb-1 pt-1">
+              {historyLoadHintVisible ? (
+                <p className="px-2 text-[11px] text-slate-400">继续下滑一次可加载更多</p>
+              ) : null}
+              <button
+                type="button"
+                onClick={loadMoreAgentHistory}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:border-indigo-200 hover:bg-indigo-50"
+              >
+                加载更多历史
+              </button>
+            </div>
+          ) : null}
         </div>
       </section>
     </div>

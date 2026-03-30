@@ -1,16 +1,21 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+
+from app.schemas.repository import RepositoryItem
+from app.services.repository_storage import get_repository_storage_service
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 
 
-@router.get("/blueprint")
-async def skills_blueprint() -> dict[str, object]:
-    return {
-        "status": "planned",
-        "skill_definition": {
-            "code": "unique identifier",
-            "risk_level": "L0-L3",
-            "protocol_type": "builtin|mcp|a2a|custom",
-            "io_schema": "json schema",
-        },
-    }
+@router.get("", response_model=list[RepositoryItem])
+async def list_skills() -> list[RepositoryItem]:
+    service = get_repository_storage_service()
+    return service.list_skills()
+
+
+@router.get("/{code}", response_model=RepositoryItem)
+async def get_skill(code: str) -> RepositoryItem:
+    service = get_repository_storage_service()
+    item = service.get_skill(code)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"Skill '{code}' not found")
+    return item

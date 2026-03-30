@@ -1,3 +1,5 @@
+"""Built-in note tool placeholder for structured runtime note creation."""
+
 from app.core.tools.base import Tool, ToolResult
 
 

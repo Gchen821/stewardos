@@ -12,3 +12,4 @@ class ChatSendResponse(BaseModel):
     reply: str
     selected_model: str
     trace_id: str | None = None
+    metadata: dict[str, object] | None = None

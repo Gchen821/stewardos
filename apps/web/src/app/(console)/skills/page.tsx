@@ -162,7 +162,11 @@ export default function SkillsPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => deleteSkill(item.id)}
+                        onClick={() => {
+                          if (window.confirm(`确认删除 Skill「${item.name}」吗？`)) {
+                            deleteSkill(item.id);
+                          }
+                        }}
                         className="rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700"
                       >
                         删除

@@ -1,3 +1,5 @@
+"""Model routing logic for system, agent, and conversation precedence."""
+
 from dataclasses import dataclass
 
 

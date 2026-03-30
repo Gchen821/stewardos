@@ -1,3 +1,5 @@
+"""Agent executor coordinating context construction and invocation."""
+
 from app.core.agent.base import Agent, AgentResult
 from app.core.agent.context import ContextBuilder
 from app.core.agent.message import AgentMessage

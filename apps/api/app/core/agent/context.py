@@ -1,7 +1,10 @@
+"""Context envelope and builder for runtime prompt assembly."""
+
 from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.agent.message import AgentMessage
+from app.core.agent.gssc_builder import ContextBuilder as GSSCContextBuilder
 
 
 @dataclass(slots=True)
@@ -31,6 +34,12 @@ class ContextBuilder:
         notes: list[str],
         evidence: list[str],
     ) -> ContextEnvelope:
+        gssc = GSSCContextBuilder()
+        structured = gssc.build(
+            user_query=query,
+            conversation_history=conversation,
+            system_instructions="Follow system policies, risk limits, and active permissions.",
+        )
         state_parts = [
             "memory_summary=" + "; ".join(memory) if memory else "memory_summary=none",
             "notes=" + "; ".join(notes) if notes else "notes=none",
@@ -39,8 +48,9 @@ class ContextBuilder:
             query=query,
             role_and_policies="Follow system policies, risk limits, and active permissions.",
             task=query,
-            state="\n".join(state_parts),
+            state="\n".join(state_parts + [f"structured_context_ready={bool(structured)}"]),
             evidence=evidence,
             history=conversation,
             output_contract="Respond with a grounded answer and explicit tool usage summary when applicable.",
+            metadata={"gssc_context": structured},
         )

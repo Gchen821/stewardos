@@ -1,3 +1,5 @@
+"""A2A protocol adapter placeholder for inter-agent communication."""
+
 from app.core.protocols import ProtocolAdapter, ProtocolResult
 
 

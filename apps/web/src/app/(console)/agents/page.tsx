@@ -169,7 +169,11 @@ export default function AgentsPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => deleteAgent(item.id)}
+                        onClick={() => {
+                          if (window.confirm(`确认删除 Agent「${item.name}」吗？`)) {
+                            deleteAgent(item.id);
+                          }
+                        }}
                         className="rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700"
                       >
                         删除

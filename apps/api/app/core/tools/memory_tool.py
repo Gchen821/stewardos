@@ -1,3 +1,5 @@
+"""Built-in memory tool placeholder for note and summary interactions."""
+
 from app.core.tools.base import Tool, ToolResult
 
 

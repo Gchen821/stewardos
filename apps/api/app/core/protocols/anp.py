@@ -1,3 +1,5 @@
+"""ANP protocol adapter placeholder for future networked agent protocol."""
+
 from app.core.protocols import ProtocolAdapter, ProtocolResult
 
 

@@ -1,0 +1,9 @@
+name: Web Reader
+code: web_reader
+version: 0.1.0
+description: 读取网页正文并抽取要点
+entrypoint: scripts/workflow.py
+risk_level: L1
+bound_tools:
+  - file_reader
+status: active

@@ -25,6 +25,17 @@ class Settings(BaseSettings):
     )
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     minio_endpoint: str = Field(default="localhost:9000", alias="MINIO_ENDPOINT")
+    repository_root_path: str = Field(
+        default="./repositories",
+        alias="REPOSITORY_ROOT_PATH",
+    )
+    repository_agents_dir: str = Field(default="agents", alias="REPOSITORY_AGENTS_DIR")
+    repository_skills_dir: str = Field(default="skills", alias="REPOSITORY_SKILLS_DIR")
+    repository_tools_dir: str = Field(default="tools", alias="REPOSITORY_TOOLS_DIR")
+    repository_auto_bootstrap: bool = Field(
+        default=True,
+        alias="REPOSITORY_AUTO_BOOTSTRAP",
+    )
 
     @property
     def docs_url(self) -> str:

@@ -1,3 +1,5 @@
+"""MCP protocol adapter placeholder for tool and system integration."""
+
 from app.core.protocols import ProtocolAdapter, ProtocolResult
 
 

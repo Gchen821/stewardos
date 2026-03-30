@@ -21,6 +21,14 @@ export type SkillRecord = {
   updatedAt: string;
 };
 
+export type RepositoryConfig = {
+  rootPath: string;
+  agentsDir: string;
+  skillsDir: string;
+  toolsDir: string;
+  autoBootstrap: boolean;
+};
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -39,4 +47,19 @@ export type ChatThread = {
   updatedAt: string;
   messageCount: number;
   lastMessagePreview: string;
+};
+
+export type RuntimeTokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  updatedAt: string | null;
+  byModel: Record<
+    string,
+    {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+    }
+  >;
 };

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { type KeyboardEvent, useMemo, useState } from "react";
 
 import { useStewardStore } from "@/lib/steward-store";
 
@@ -42,6 +42,12 @@ export default function AgentSessionPage() {
     setInput("");
   }
 
+  function onInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    send();
+  }
+
   return (
     <div className="relative mx-auto min-h-[calc(100vh-180px)] w-full max-w-5xl pb-28">
       <section className="min-h-[60vh] px-4 py-3">
@@ -79,6 +85,7 @@ export default function AgentSessionPage() {
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onKeyDown={onInputKeyDown}
             placeholder={`继续给 ${agent.name} 发送消息...`}
             className="min-h-16 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none ring-indigo-200 transition focus:ring"
           />

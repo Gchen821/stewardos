@@ -1,3 +1,5 @@
+"""Protocol adapter contracts for MCP, A2A, and ANP integration points."""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any

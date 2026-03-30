@@ -1,0 +1,8 @@
+name: Web Query
+code: web_query
+version: 0.1.0
+description: 执行网页检索请求
+entrypoint: tool.py
+runtime_type: python
+risk_level: L1
+status: active

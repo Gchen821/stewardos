@@ -1,3 +1,5 @@
+"""Built-in RAG tool placeholder for grounded evidence retrieval."""
+
 from app.core.tools.base import Tool, ToolResult
 
 

@@ -1,7 +1,15 @@
+"""Normalized runtime message model shared by agents and LLM gateway."""
+
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
 from typing import Any
+
+try:  # Python 3.11+
+    from enum import StrEnum
+except ImportError:  # Python 3.10 fallback
+    class StrEnum(str, Enum):
+        pass
 
 
 class MessageRole(StrEnum):

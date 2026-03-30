@@ -1,0 +1,9 @@
+name: Knowledge Search
+code: knowledge_search
+version: 0.1.0
+description: 检索知识并返回结构化摘要
+entrypoint: scripts/workflow.py
+risk_level: L1
+bound_tools:
+  - knowledge_query
+status: active

@@ -1,0 +1,8 @@
+name: File Reader
+code: file_reader
+version: 0.1.0
+description: 读取本地或远程文本内容
+entrypoint: tool.py
+runtime_type: python
+risk_level: L1
+status: active

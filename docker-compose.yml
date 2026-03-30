@@ -64,13 +64,25 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       MINIO_BUCKET: ${MINIO_BUCKET:-stewardos-dev}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
-      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      REPOSITORY_ROOT_PATH: ${REPOSITORY_ROOT_PATH:-./repositories}
+      REPOSITORY_AGENTS_DIR: ${REPOSITORY_AGENTS_DIR:-agents}
+      REPOSITORY_SKILLS_DIR: ${REPOSITORY_SKILLS_DIR:-skills}
+      REPOSITORY_TOOLS_DIR: ${REPOSITORY_TOOLS_DIR:-tools}
+      REPOSITORY_AUTO_BOOTSTRAP: ${REPOSITORY_AUTO_BOOTSTRAP:-true}
+      LLM_MODEL_ID: ${LLM_MODEL_ID:-gpt-4.1-mini}
+      LLM_FALLBACK_MODEL_ID: ${LLM_FALLBACK_MODEL_ID:-}
+      LLM_RETRY_MAX: ${LLM_RETRY_MAX:-2}
+      LLM_RETRY_BASE_DELAY: ${LLM_RETRY_BASE_DELAY:-0.8}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-60}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY:-}
+      QDRANT_URL: ${QDRANT_URL:-}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      NEO4J_URI: ${NEO4J_URI:-}
+      NEO4J_USERNAME: ${NEO4J_USERNAME:-}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
@@ -115,6 +127,34 @@ services:
       - redis
       - minio
       - api
+
+  redis-init:
+    image: alpine:3.20
+    container_name: stewardos-redis-init
+    profiles: ["bootstrap"]
+    working_dir: /workspace
+    command: >
+      sh -lc "apk add --no-cache bash docker-cli &&
+      bash infra/sql/002_redis_bootstrap.sh"
+    volumes:
+      - ./:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - redis
+
+  minio-init:
+    image: alpine:3.20
+    container_name: stewardos-minio-init
+    profiles: ["bootstrap"]
+    working_dir: /workspace
+    command: >
+      sh -lc "apk add --no-cache bash docker-cli &&
+      bash infra/sql/003_minio_bootstrap.sh"
+    volumes:
+      - ./:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - minio
 
 volumes:
   postgres_data:

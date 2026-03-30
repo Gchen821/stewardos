@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 
 from app.config import get_settings
+from app.schemas.repository import RepositorySummary
+from app.services.repository_storage import get_repository_storage_service
 
 router = APIRouter()
 
@@ -20,6 +22,7 @@ async def root() -> dict[str, str]:
 @router.get("/health", tags=["system"])
 async def health() -> dict[str, object]:
     settings = get_settings()
+    repository = get_repository_storage_service()
     return {
         "status": "ok",
         "service": "api",
@@ -36,4 +39,18 @@ async def health() -> dict[str, object]:
             "context_builder": "planned",
             "protocols": ["mcp", "a2a", "anp"],
         },
+        "repository": repository.summary().model_dump(),
     }
+
+
+@router.get("/repository/summary", response_model=RepositorySummary, tags=["repository"])
+async def repository_summary() -> RepositorySummary:
+    service = get_repository_storage_service()
+    return service.summary()
+
+
+@router.post("/repository/scan", response_model=RepositorySummary, tags=["repository"])
+async def repository_scan() -> RepositorySummary:
+    service = get_repository_storage_service()
+    service.scan()
+    return service.summary()
