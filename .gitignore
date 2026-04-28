@@ -41,3 +41,4 @@ minio_data/
 docs/*
 !docs/task/
 !docs/task/*.md
+apps/api/runtime_logs/*
