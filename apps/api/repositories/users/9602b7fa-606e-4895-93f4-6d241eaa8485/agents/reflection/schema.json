@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "properties": {
+    "goal": {
+      "type": "string"
+    },
+    "plan": {
+      "type": "object"
+    },
+    "executions": {
+      "type": "array"
+    },
+    "repeated_plan": {
+      "type": "boolean"
+    }
+  }
+}

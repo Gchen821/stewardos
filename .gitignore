@@ -39,3 +39,5 @@ redis_data/
 minio_data/
 
 docs/*
+!docs/task/
+!docs/task/*.md

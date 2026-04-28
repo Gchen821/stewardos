@@ -1,56 +1,69 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.config import get_settings
-from app.schemas.repository import RepositorySummary
-from app.services.repository_storage import get_repository_storage_service
+from app.api.dependencies.auth import get_current_user
+from app.runtime.butler_runtime import ButlerRuntimeService
+from app.runtime.llm_loader import LLMLoader
+from app.schemas.runtime import (
+    RepositoryDirectoryBrowseRead,
+    LLMSettingsRead,
+    LLMSettingsUpdate,
+    RepositorySettingsRead,
+    RepositorySettingsUpdate,
+)
+from app.schemas.users import UserRead
+from app.services.llm_settings import LLMSettingsService
+from app.services.repository_settings import RepositorySettingsService
 
-router = APIRouter()
+router = APIRouter(tags=["meta"])
 
 
-@router.get("/", tags=["meta"])
-async def root() -> dict[str, str]:
-    settings = get_settings()
+@router.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@router.get("/runtime/info")
+def runtime_info() -> dict[str, object]:
+    llm = LLMLoader().load()
+    butler = ButlerRuntimeService.describe()
     return {
-        "name": settings.project_name,
-        "environment": settings.app_env,
-        "docs_url": settings.docs_url,
-        "health_url": f"{settings.api_v1_prefix}/health",
-        "runtime_doc": "/docs/architecture/StewardOS-Agent-Runtime-架构设计.md",
+        "mode": "butler-and-agent-chat",
+        "runtime_scope": {
+            "enabled": ["agent_chat", "butler_orchestration"],
+            "reserved": ["multi_agent_collaboration"],
+        },
+        "butler": butler,
+        "llm": llm.model_dump(exclude={"api_key"}),
+        "auth": {"default_admin": "admin", "default_password": "123456"},
     }
 
 
-@router.get("/health", tags=["system"])
-async def health() -> dict[str, object]:
-    settings = get_settings()
-    repository = get_repository_storage_service()
-    return {
-        "status": "ok",
-        "service": "api",
-        "environment": settings.app_env,
-        "version": "0.1.0",
-        "dependencies": {
-            "database_configured": bool(settings.database_url),
-            "redis_configured": bool(settings.redis_url),
-            "minio_endpoint": settings.minio_endpoint,
-        },
-        "runtime": {
-            "core_layer": "planned",
-            "domain_layer": "planned",
-            "context_builder": "planned",
-            "protocols": ["mcp", "a2a", "anp"],
-        },
-        "repository": repository.summary().model_dump(),
-    }
+@router.get("/runtime/llm-settings", response_model=LLMSettingsRead)
+def get_llm_settings(current_user: UserRead = Depends(get_current_user)) -> LLMSettingsRead:
+    return LLMSettingsService(current_user.id).get_settings_payload()
 
 
-@router.get("/repository/summary", response_model=RepositorySummary, tags=["repository"])
-async def repository_summary() -> RepositorySummary:
-    service = get_repository_storage_service()
-    return service.summary()
+@router.put("/runtime/llm-settings", response_model=LLMSettingsRead)
+def update_llm_settings(payload: LLMSettingsUpdate, current_user: UserRead = Depends(get_current_user)) -> LLMSettingsRead:
+    return LLMSettingsService(current_user.id).update_settings(payload)
 
 
-@router.post("/repository/scan", response_model=RepositorySummary, tags=["repository"])
-async def repository_scan() -> RepositorySummary:
-    service = get_repository_storage_service()
-    service.scan()
-    return service.summary()
+@router.get("/runtime/repository-settings", response_model=RepositorySettingsRead)
+def get_repository_settings(current_user: UserRead = Depends(get_current_user)) -> RepositorySettingsRead:
+    return RepositorySettingsService(current_user.id).get_settings_payload()
+
+
+@router.put("/runtime/repository-settings", response_model=RepositorySettingsRead)
+def update_repository_settings(
+    payload: RepositorySettingsUpdate,
+    current_user: UserRead = Depends(get_current_user),
+) -> RepositorySettingsRead:
+    return RepositorySettingsService(current_user.id).update_settings(payload)
+
+
+@router.get("/runtime/repository-directories", response_model=RepositoryDirectoryBrowseRead)
+def browse_repository_directories(
+    path: str | None = None,
+    current_user: UserRead = Depends(get_current_user),
+) -> RepositoryDirectoryBrowseRead:
+    return RepositorySettingsService(current_user.id).browse_directories(path)

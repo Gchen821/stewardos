@@ -1,0 +1,16 @@
+id: reflection
+type: reflection
+name: Reflection Controller
+version: 1.0.0
+description: Filesystem-loaded reflection control agent for the butler orchestration loop.
+entry:
+  prompt: prompt.md
+  runtime: main.py
+dependencies:
+  required_skills: []
+  default_skills: []
+  optional_skills: []
+  default_tools: []
+config:
+  memory_policy: session
+  retrieval_policy: manual

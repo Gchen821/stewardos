@@ -1,476 +1,402 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { type KeyboardEvent, type UIEvent, useMemo, useRef, useState, type WheelEvent } from "react";
+import { type ReactNode, type UIEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { apiPlanNote } from "@/lib/api";
-import { useStewardStore } from "@/lib/steward-store";
+import { type Agent, type Skill, type Tool } from "@/lib/api";
+import { fetchAgents, fetchConversations, fetchSkills, fetchTools, sendChat, type Conversation } from "@/lib/api";
 
-const defaultTools = [
-  { id: "memory-tool", name: "Memory Tool", description: "工作记忆与结构化笔记写入能力" },
-  { id: "rag-tool", name: "RAG Tool", description: "检索证据注入上下文" },
-  { id: "mcp-tool", name: "MCP Tool", description: "外部工具协议适配" },
-  { id: "terminal-tool", name: "Terminal Tool", description: "受控命令执行" },
-];
+type ButlerMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+};
 
-export default function ChatPage() {
-  const {
-    agents,
-    skills,
-    upsertAgent,
-    upsertSkill,
-    listThreads,
-    createThread,
-  } = useStewardStore();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const conversationId = searchParams.get("conversation");
+const CARD_PAGE_SIZE = 6;
 
-  const [input, setInput] = useState("");
+function CardSection({
+  title,
+  emptyText,
+  children,
+  onScroll,
+}: {
+  title: string;
+  emptyText: string;
+  children: ReactNode;
+  onScroll?: (event: UIEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-4">
+      <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1" onScroll={onScroll}>
+        {children ?? <p className="text-sm text-slate-500">{emptyText}</p>}
+      </div>
+    </section>
+  );
+}
+
+export default function ButlerChatPage() {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [tools, setTools] = useState<Tool[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationId, setConversationId] = useState<number | null>(null);
+  const [content, setContent] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
   const [showToolPicker, setShowToolPicker] = useState(false);
-  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>(
-    agents
-      .filter((item) => item.enabled && item.permissionEnabled && item.status === "online")
-      .map((item) => item.id),
-  );
-  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>(
-    skills
-      .filter((item) => item.enabled && item.permissionEnabled)
-      .map((item) => item.id),
-  );
-  const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
-  const [activeAgentId, setActiveAgentId] = useState<string | null>(
-    agents.find((item) => item.enabled && item.permissionEnabled && item.status === "online")
-      ?.id ?? null,
-  );
+  const [boundAgentIds, setBoundAgentIds] = useState<number[]>([]);
+  const [boundSkillIds, setBoundSkillIds] = useState<number[]>([]);
+  const [boundToolIds, setBoundToolIds] = useState<number[]>([]);
+  const [visibleAgentCount, setVisibleAgentCount] = useState(CARD_PAGE_SIZE);
+  const [visibleHistoryCount, setVisibleHistoryCount] = useState(CARD_PAGE_SIZE);
+  const [messages, setMessages] = useState<ButlerMessage[]>([
+    {
+      id: "welcome",
+      role: "assistant",
+      content: "我是主管家入口。这里会按 planner -> 执行已注册资产 -> reflection 的流程推进任务。",
+    },
+  ]);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const messageViewportRef = useRef<HTMLDivElement | null>(null);
 
-  const enabledAgents = agents.filter(
-    (item) => item.enabled && item.permissionEnabled && item.status === "online",
-  );
-  const currentAgent = enabledAgents.find((item) => item.id === activeAgentId) ?? enabledAgents[0];
-  const butlerThreads = listThreads("butler");
-  const historyWheelDeltaRef = useRef(0);
-  const historyBottomHitRef = useRef(0);
-  const [historyVisibleCount, setHistoryVisibleCount] = useState(30);
-  const [historyLoadHintVisible, setHistoryLoadHintVisible] = useState(false);
-  const visibleButlerThreads = useMemo(
-    () => butlerThreads.slice(0, historyVisibleCount),
-    [butlerThreads, historyVisibleCount],
-  );
-  const hasMoreButlerHistory = visibleButlerThreads.length < butlerThreads.length;
-
-  function loadMoreButlerHistory() {
-    setHistoryVisibleCount((prev) => Math.min(prev + 20, butlerThreads.length));
-    historyBottomHitRef.current = 0;
-    setHistoryLoadHintVisible(false);
-  }
-
-  function onButlerHistoryWheel(event: WheelEvent<HTMLDivElement>) {
-    historyWheelDeltaRef.current = event.deltaY;
-  }
-
-  function onButlerHistoryScroll(event: UIEvent<HTMLDivElement>) {
-    if (!hasMoreButlerHistory) return;
-    const el = event.currentTarget;
-    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 16;
-    const scrollingDown = historyWheelDeltaRef.current > 0;
-    if (!nearBottom || !scrollingDown) return;
-    historyBottomHitRef.current += 1;
-    if (historyBottomHitRef.current >= 2) {
-      loadMoreButlerHistory();
-      return;
+  useEffect(() => {
+    async function load() {
+      const [agentRows, skillRows, toolRows, conversationRows] = await Promise.all([
+        fetchAgents(),
+        fetchSkills(),
+        fetchTools(),
+        fetchConversations(),
+      ]);
+      setAgents(agentRows.filter((item) => item.enabled && !item.is_deleted));
+      setSkills(skillRows.filter((item) => item.enabled && !item.is_deleted));
+      setTools(toolRows.filter((item) => item.enabled && !item.is_deleted));
+      setConversations(conversationRows.filter((item) => item.target_type === "butler"));
     }
-    setHistoryLoadHintVisible(true);
+    void load();
+  }, []);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    resizeTextarea(textarea);
+  }, [content]);
+
+  useEffect(() => {
+    const viewport = messageViewportRef.current;
+    if (!viewport) return;
+    viewport.scrollTop = viewport.scrollHeight;
+  }, [messages]);
+
+  const boundAgents = useMemo(
+    () => agents.filter((item) => boundAgentIds.includes(item.id)),
+    [agents, boundAgentIds],
+  );
+  const boundSkills = useMemo(
+    () => skills.filter((item) => boundSkillIds.includes(item.id)),
+    [skills, boundSkillIds],
+  );
+  const boundTools = useMemo(
+    () => tools.filter((item) => boundToolIds.includes(item.id)),
+    [tools, boundToolIds],
+  );
+  const visibleBoundAgents = boundAgents.slice(0, visibleAgentCount);
+  const visibleConversations = conversations.slice(0, visibleHistoryCount);
+
+  function toggleNumber(list: number[], value: number, setter: (value: number[]) => void) {
+    setter(list.includes(value) ? list.filter((item) => item !== value) : [...list, value]);
   }
 
-  function toggleAgentSelection(agentId: string) {
-    const found = agents.find((item) => item.id === agentId);
-    if (!found) return;
+  function resizeTextarea(textarea: HTMLTextAreaElement) {
+    const computedStyle = window.getComputedStyle(textarea);
+    const minHeight = Number.parseFloat(computedStyle.minHeight) || 48;
+    const maxHeight = Number.parseFloat(computedStyle.maxHeight) || 224;
 
-    const isSelected = selectedAgentIds.includes(agentId);
-    if (isSelected) {
-      setSelectedAgentIds((prev) => prev.filter((id) => id !== agentId));
-      setActiveAgentId((prev) => (prev === agentId ? null : prev));
-      return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight)}px`;
+  }
+
+  function loadMoreOnScroll(
+    event: UIEvent<HTMLDivElement>,
+    visibleCount: number,
+    totalCount: number,
+    setter: (value: number) => void,
+  ) {
+    const target = event.currentTarget;
+    const nearBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 24;
+    if (nearBottom && visibleCount < totalCount) {
+      setter(Math.min(visibleCount + CARD_PAGE_SIZE, totalCount));
     }
-
-    upsertAgent({
-      ...found,
-      status: "online",
-      enabled: true,
-      permissionEnabled: true,
-    });
-
-    setSelectedAgentIds((prev) =>
-      prev.includes(agentId) ? prev : [...prev, agentId],
-    );
-    setActiveAgentId(agentId);
   }
 
-  function toggleSkillSelection(skillId: string) {
-    const found = skills.find((item) => item.id === skillId);
-    if (!found) return;
+  async function send() {
+    const text = content.trim();
+    if (!text || isSending) return;
+    const nextUser: ButlerMessage = { id: `u-${Date.now()}`, role: "user", content: text };
+    setMessages((prev) => [...prev, nextUser]);
+    setContent("");
+    setShowPlusMenu(false);
+    setShowAgentPicker(false);
+    setShowSkillPicker(false);
+    setShowToolPicker(false);
+    setIsSending(true);
 
-    const isSelected = selectedSkillIds.includes(skillId);
-    if (isSelected) {
-      setSelectedSkillIds((prev) => prev.filter((id) => id !== skillId));
-      return;
+    try {
+      const result = await sendChat({
+        conversation_id: conversationId,
+        target_type: "butler",
+        target_id: 0,
+        content: text,
+        bound_agent_ids: boundAgentIds,
+        bound_skill_ids: boundSkillIds,
+        bound_tool_ids: boundToolIds,
+      });
+      setConversationId(result.conversation_id);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content: result.reply,
+        },
+      ]);
+      const conversationRows = await fetchConversations();
+      setConversations(conversationRows.filter((item) => item.target_type === "butler"));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "主管家执行失败";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content: `主管家执行失败：${message}`,
+        },
+      ]);
+    } finally {
+      setIsSending(false);
     }
-
-    upsertSkill({
-      ...found,
-      enabled: true,
-      permissionEnabled: true,
-    });
-    setSelectedSkillIds((prev) =>
-      prev.includes(skillId) ? prev : [...prev, skillId],
-    );
-  }
-
-  function toggleToolSelection(toolId: string) {
-    const isSelected = selectedToolIds.includes(toolId);
-    if (isSelected) {
-      setSelectedToolIds((prev) => prev.filter((id) => id !== toolId));
-      return;
-    }
-    setSelectedToolIds((prev) =>
-      prev.includes(toolId) ? prev : [...prev, toolId],
-    );
-  }
-
-  function send() {
-    const text = input.trim();
-    if (!text) return;
-    const threadId = createThread({
-      scope: "butler",
-      firstUserMessage: text,
-    });
-    setInput("");
-    router.push(`/chat/session/${threadId}`);
-  }
-
-  function onInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== "Enter" || event.shiftKey) return;
-    event.preventDefault();
-    send();
   }
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-2">
-        <p className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
-          主控管家对话
-        </p>
-        <h2 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          与主控管家对话，协调和管理你的 Agent 大军
-        </h2>
-        <p className="text-sm text-slate-600 sm:text-base">{apiPlanNote}</p>
-        {conversationId ? (
-          <p className="text-xs text-slate-500">当前会话：{conversationId}</p>
-        ) : null}
-      </header>
+    <div className="flex h-[calc(100vh-8rem)] min-h-[720px] flex-col gap-6 lg:grid lg:grid-cols-[340px_minmax(0,1fr)]">
+      <aside className="flex min-h-0 flex-col gap-4">
+        <header className="space-y-2">
+          <p className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">管家对话</p>
+          <h2 className="text-3xl font-semibold tracking-tight text-slate-950">总控入口</h2>
+          <p className="text-sm text-slate-600">左侧查看绑定内容和最近会话，右侧完成聊天操作。</p>
+        </header>
 
-      <section className="w-full rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-5 shadow-sm">
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-          <textarea
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={onInputKeyDown}
-            placeholder="输入第一句话作为聊天主题，发送后自动进入会话页。"
-            className="min-h-24 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none ring-indigo-200 transition focus:ring"
-          />
-          <button
-            type="button"
-            onClick={send}
-            className="h-12 rounded-xl bg-slate-900 px-5 text-sm font-medium text-white hover:bg-slate-800"
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          <CardSection
+            title="绑定的 Agent"
+            emptyText="暂未绑定 Agent"
+            onScroll={(event) => loadMoreOnScroll(event, visibleAgentCount, boundAgents.length, setVisibleAgentCount)}
           >
-            发送
-          </button>
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowPlusMenu((prev) => !prev)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-xl text-slate-700 hover:bg-slate-100"
-            >
-              +
-            </button>
-            {showPlusMenu ? (
-              <div className="absolute left-0 top-11 z-20 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAgentPicker(true);
-                    setShowPlusMenu(false);
-                  }}
-                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
-                >
-                  添加 Agent
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSkillPicker(true);
-                    setShowPlusMenu(false);
-                  }}
-                  className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
-                >
-                  添加 Skill
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowToolPicker(true);
-                    setShowPlusMenu(false);
-                  }}
-                  className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
-                >
-                  添加 Tool
-                </button>
+            {visibleBoundAgents.length ? (
+              <div className="space-y-2">
+                {visibleBoundAgents.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
+                    <p className="truncate font-medium text-slate-900">{item.name}</p>
+                    <p className="mt-1 truncate text-xs text-slate-500">{item.code}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-slate-600">{item.description || "暂无描述"}</p>
+                  </div>
+                ))}
               </div>
-            ) : null}
-          </div>
-          <p className="text-xs text-slate-500">
-            当前选中：Agent {currentAgent ? currentAgent.name : "未选择"} · Skill {selectedSkillIds.length} 个 · Tool {selectedToolIds.length} 个
-          </p>
-        </div>
-      </section>
+            ) : (
+              <p className="text-sm text-slate-500">暂未绑定 Agent</p>
+            )}
+          </CardSection>
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-semibold text-slate-900">已启用子 Agent</h3>
-          <span className="text-xs text-slate-500">
-            共 {enabledAgents.length} 个可直接对话
-          </span>
-        </div>
-        <div className="flex w-full gap-4 overflow-x-auto pb-2">
-          {enabledAgents.map((agent) => (
-            <Link
-              key={agent.id}
-              href={`/chat/agent/${agent.id}`}
-              onClick={() => setActiveAgentId(agent.id)}
-              className="group relative z-0 min-w-[280px] flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:z-10 hover:border-indigo-400 hover:shadow-lg"
-            >
-              <div className="flex items-start gap-3">
-                <div className="rounded-xl bg-indigo-50 p-2">
-                  <Image src={agent.avatar} alt={agent.name} width={24} height={24} />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-semibold text-slate-900 group-hover:text-indigo-700">
-                    {agent.name}
-                  </p>
-                  <p className="text-sm text-slate-600">{agent.description}</p>
+          <CardSection title="绑定的 Skills / Tools" emptyText="暂无绑定内容">
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Skills</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {boundSkills.length ? (
+                    boundSkills.map((item) => (
+                      <span key={item.id} className="max-w-full truncate rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                        {item.name}
+                      </span>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500">无</p>
+                  )}
                 </div>
               </div>
-            </Link>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Tools</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {boundTools.length ? (
+                    boundTools.map((item) => (
+                      <span key={item.id} className="max-w-full truncate rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                        {item.name}
+                      </span>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500">无</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardSection>
+
+          <CardSection
+            title="历史聊天记录"
+            emptyText="暂无历史聊天记录"
+            onScroll={(event) => loadMoreOnScroll(event, visibleHistoryCount, conversations.length, setVisibleHistoryCount)}
+          >
+            {visibleConversations.length ? (
+              <div className="space-y-2">
+                {visibleConversations.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                    <p className="truncate font-medium text-slate-900">{item.title}</p>
+                    <p className="mt-1 truncate text-xs text-slate-500">
+                      目标 ID: {item.target_id} · 更新时间 {new Date(item.updated_at).toLocaleString("zh-CN")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">暂无历史聊天记录</p>
+            )}
+          </CardSection>
+        </div>
+      </aside>
+
+      <section className="flex min-h-0 flex-col rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-5 shadow-sm">
+        <div ref={messageViewportRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+          {messages.map((item) => (
+            <div key={item.id} className={item.role === "assistant" ? "flex justify-start" : "flex justify-end"}>
+              <div
+                className={
+                  item.role === "assistant"
+                    ? "max-w-[80%] whitespace-pre-wrap rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-900"
+                    : "max-w-[80%] whitespace-pre-wrap rounded-2xl bg-slate-900 px-4 py-3 text-sm text-white"
+                }
+              >
+                {item.content}
+              </div>
+            </div>
           ))}
         </div>
-      </section>
 
-      <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="text-lg font-semibold text-slate-900">主控历史聊天记录</h3>
-        <div
-          className="max-h-[260px] space-y-2 overflow-auto pr-1"
-          onWheel={onButlerHistoryWheel}
-          onScroll={onButlerHistoryScroll}
-        >
-          {butlerThreads.length > 0 ? (
-            visibleButlerThreads.map((thread) => (
+        <div className="mt-4 shrink-0 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm">
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={(event) => {
+              setContent(event.target.value);
+              resizeTextarea(event.target);
+            }}
+            placeholder="向管家输入任务..."
+            className="min-h-[44px] max-h-56 w-full resize-none overflow-y-auto rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm leading-5 outline-none ring-indigo-200 transition focus:ring"
+          />
+
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="relative">
               <button
-                key={thread.id}
                 type="button"
-                onClick={() => router.push(`/chat/session/${thread.id}`)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm shadow-sm transition hover:border-indigo-300"
+                onClick={() => setShowPlusMenu((prev) => !prev)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-xl text-slate-700 hover:bg-slate-100"
               >
-                <p className="font-medium text-slate-900">{thread.title}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {thread.messageCount} 条消息 · 最近更新 {new Date(thread.updatedAt).toLocaleString("zh-CN")}
-                </p>
+                +
               </button>
-            ))
-          ) : (
-            <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-5 text-sm text-slate-500">
-              暂无历史记录，直接输入第一句话即可创建新会话。
-            </p>
-          )}
-          {hasMoreButlerHistory ? (
-            <div className="space-y-1 px-1 pb-1 pt-1">
-              {historyLoadHintVisible ? (
-                <p className="px-2 text-[11px] text-slate-400">继续下滑一次可加载更多</p>
+              {showPlusMenu ? (
+                <div className="absolute bottom-12 left-0 z-20 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAgentPicker(true);
+                      setShowSkillPicker(false);
+                      setShowToolPicker(false);
+                      setShowPlusMenu(false);
+                    }}
+                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                  >
+                    添加 Agent
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSkillPicker(true);
+                      setShowAgentPicker(false);
+                      setShowToolPicker(false);
+                      setShowPlusMenu(false);
+                    }}
+                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                  >
+                    添加 Skills
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowToolPicker(true);
+                      setShowAgentPicker(false);
+                      setShowSkillPicker(false);
+                      setShowPlusMenu(false);
+                    }}
+                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                  >
+                    添加 Tools
+                  </button>
+                </div>
               ) : null}
-              <button
-                type="button"
-                onClick={loadMoreButlerHistory}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:border-indigo-200 hover:bg-indigo-50"
-              >
-                加载更多历史
-              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={send}
+              disabled={isSending}
+              className="h-12 rounded-xl bg-slate-900 px-5 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              {isSending ? "执行中..." : "发送"}
+            </button>
+          </div>
+
+          {showAgentPicker ? (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-2 text-sm font-medium text-slate-800">绑定 Agent</p>
+              <div className="grid max-h-52 gap-2 overflow-y-auto md:grid-cols-2">
+                {agents.map((item) => (
+                  <label key={item.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm">
+                    <input type="checkbox" checked={boundAgentIds.includes(item.id)} onChange={() => toggleNumber(boundAgentIds, item.id, setBoundAgentIds)} />
+                    <span className="truncate">{item.name} ({item.code})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {showSkillPicker ? (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-2 text-sm font-medium text-slate-800">绑定 Skills</p>
+              <div className="grid max-h-52 gap-2 overflow-y-auto md:grid-cols-2">
+                {skills.map((item) => (
+                  <label key={item.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm">
+                    <input type="checkbox" checked={boundSkillIds.includes(item.id)} onChange={() => toggleNumber(boundSkillIds, item.id, setBoundSkillIds)} />
+                    <span className="truncate">{item.name} ({item.code})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {showToolPicker ? (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-2 text-sm font-medium text-slate-800">绑定 Tools</p>
+              <div className="grid max-h-52 gap-2 overflow-y-auto md:grid-cols-2">
+                {tools.map((item) => (
+                  <label key={item.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm">
+                    <input type="checkbox" checked={boundToolIds.includes(item.id)} onChange={() => toggleNumber(boundToolIds, item.id, setBoundToolIds)} />
+                    <span className="truncate">{item.name} ({item.code})</span>
+                  </label>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>
       </section>
-
-      {showAgentPicker ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-4xl rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xl font-semibold text-slate-900">添加 Agent</h4>
-              <button
-                type="button"
-                onClick={() => setShowAgentPicker(false)}
-                className="rounded-lg border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-100"
-              >
-                关闭
-              </button>
-            </div>
-            <p className="mt-2 text-sm text-slate-500">
-              点击 Agent 卡片即可加入主控会话。选中卡片会高亮为绿色并带对勾。
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {agents.map((agent) => {
-                const selected = selectedAgentIds.includes(agent.id);
-                return (
-                  <button
-                    type="button"
-                    key={agent.id}
-                    onClick={() => toggleAgentSelection(agent.id)}
-                    className={
-                      selected
-                        ? "rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-left shadow-sm"
-                        : "rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-indigo-300"
-                    }
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-xl bg-indigo-50 p-2">
-                        <Image src={agent.avatar} alt={agent.name} width={22} height={22} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-900">{agent.name}</p>
-                        <p className="mt-1 text-xs text-slate-600">{agent.description}</p>
-                      </div>
-                      {selected ? (
-                        <span className="ml-auto rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">
-                          ✓
-                        </span>
-                      ) : null}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {showSkillPicker ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-4xl rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xl font-semibold text-slate-900">添加 Skill</h4>
-              <button
-                type="button"
-                onClick={() => setShowSkillPicker(false)}
-                className="rounded-lg border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-100"
-              >
-                关闭
-              </button>
-            </div>
-            <p className="mt-2 text-sm text-slate-500">
-              点击 Skill 卡片可选中，再次点击可取消；取消仅表示当前主控不优先使用。
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {skills.map((skill) => {
-                const selected = selectedSkillIds.includes(skill.id);
-                return (
-                  <button
-                    type="button"
-                    key={skill.id}
-                    onClick={() => toggleSkillSelection(skill.id)}
-                    className={
-                      selected
-                        ? "rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-left shadow-sm"
-                        : "rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-indigo-300"
-                    }
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-xs font-semibold text-indigo-700">
-                        SK
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-900">{skill.name}</p>
-                        <p className="mt-1 text-xs text-slate-600">{skill.description}</p>
-                      </div>
-                      {selected ? (
-                        <span className="ml-auto rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">
-                          ✓
-                        </span>
-                      ) : null}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {showToolPicker ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-4xl rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xl font-semibold text-slate-900">添加 Tool</h4>
-              <button
-                type="button"
-                onClick={() => setShowToolPicker(false)}
-                className="rounded-lg border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-100"
-              >
-                关闭
-              </button>
-            </div>
-            <p className="mt-2 text-sm text-slate-500">
-              点击 Tool 卡片可选中，再次点击可取消；取消仅表示当前主控不优先使用。
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {defaultTools.map((tool) => {
-                const selected = selectedToolIds.includes(tool.id);
-                return (
-                  <button
-                    type="button"
-                    key={tool.id}
-                    onClick={() => toggleToolSelection(tool.id)}
-                    className={
-                      selected
-                        ? "rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-left shadow-sm"
-                        : "rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-indigo-300"
-                    }
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-xs font-semibold text-indigo-700">
-                        TL
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-900">{tool.name}</p>
-                        <p className="mt-1 text-xs text-slate-600">{tool.description}</p>
-                      </div>
-                      {selected ? (
-                        <span className="ml-auto rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">
-                          ✓
-                        </span>
-                      ) : null}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -1,9 +1,0 @@
-name: XLSX Recalc
-code: xlsx_recalc
-version: 0.1.0
-description: 表格重算与结果回写（占位实现）
-entrypoint: scripts/workflow.py
-risk_level: L2
-bound_tools:
-  - spreadsheet_ops
-status: active

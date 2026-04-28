@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "properties": {
+    "goal": {
+      "type": "string"
+    },
+    "planner_memory": {
+      "type": "array"
+    },
+    "candidate_agents": {
+      "type": "array"
+    },
+    "candidate_tools": {
+      "type": "array"
+    }
+  }
+}

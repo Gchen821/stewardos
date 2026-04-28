@@ -1,8 +1,0 @@
-name: Spreadsheet Ops
-code: spreadsheet_ops
-version: 0.1.0
-description: 执行表格重算与校验
-entrypoint: tool.py
-runtime_type: python
-risk_level: L2
-status: active

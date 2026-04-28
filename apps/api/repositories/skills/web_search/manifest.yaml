@@ -1,9 +1,0 @@
-name: Web Search
-code: web_search
-version: 0.1.0
-description: 外部网页信息检索与简要归并
-entrypoint: scripts/workflow.py
-risk_level: L1
-bound_tools:
-  - web_query
-status: active
